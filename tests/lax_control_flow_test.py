@@ -492,7 +492,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     self.assertEqual(out, (7, 10))
 
   @parameterized.named_parameters(
-      {"testcase_name": "jit_scan={}_jit_f={}".format(jit_scan, jit_f),
+      {"testcase_name": "_jit_scan={}_jit_f={}".format(jit_scan, jit_f),
        "jit_scan": jit_scan, "jit_f": jit_f}
       for jit_scan in [False, True]
       for jit_f in [False, True])
@@ -521,7 +521,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     self.assertAllClose(ans, expected, check_dtypes=False)
 
   @parameterized.named_parameters(
-      {"testcase_name": "jit_scan={}_jit_f={}".format(jit_scan, jit_f),
+      {"testcase_name": "_jit_scan={}_jit_f={}".format(jit_scan, jit_f),
        "jit_scan": jit_scan, "jit_f": jit_f}
       for jit_scan in [False, True]
       for jit_f in [False, True])
@@ -550,7 +550,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     self.assertAllClose(ans, expected, check_dtypes=False)
 
   @parameterized.named_parameters(
-      {"testcase_name": "jit_scan={}_jit_f={}".format(jit_scan, jit_f),
+      {"testcase_name": "_jit_scan={}_jit_f={}".format(jit_scan, jit_f),
        "jit_scan": jit_scan, "jit_f": jit_f}
       for jit_scan in [False, True]
       for jit_f in [False, True])
@@ -579,7 +579,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     self.assertAllClose(ans, expected, check_dtypes=False)
 
   @parameterized.named_parameters(
-      {"testcase_name": "jit_scan={}_jit_f={}".format(jit_scan, jit_f),
+      {"testcase_name": "_jit_scan={}_jit_f={}".format(jit_scan, jit_f),
        "jit_scan": jit_scan, "jit_f": jit_f}
       for jit_scan in [False, True]
       for jit_f in [False, True])
@@ -695,6 +695,46 @@ class LaxControlFlowTest(jtu.JaxTestCase):
         ValueError,
         'scan got value with no leading axis to scan over.*',
         lambda: lax.scan(plus_one, p0, list(range(5))))
+
+  @parameterized.named_parameters(
+      {"testcase_name": "_jit_scan={}_jit_f={}".format(jit_scan, jit_f),
+       "jit_scan": jit_scan, "jit_f": jit_f}
+      for jit_scan in [False, True]
+      for jit_f in [False, True])
+  def testScanVmap(self, jit_scan, jit_f):
+    d = np.zeros(2)
+    def f(c, a):
+      assert a.shape == (3,)
+      assert c.shape == (4,)
+      b = np.sum(np.sin(a)) + np.sum(np.sin(c)) + np.sum(np.sin(d))
+      c = np.sin(c * b)
+      assert b.shape == ()
+      return c, b
+
+    if jit_f:
+      f = api.jit(f)
+    if jit_scan:
+      scan = api.jit(lax.scan, (0,))
+    else:
+      scan = lax.scan
+
+    as_ = np.ones((10, 5, 3))
+    c = np.ones((10, 4))
+    ans = api.vmap(lambda c, as_:                scan(f, c, as_))(c, as_)
+    expected = api.vmap(lambda c, as_: scan_reference(f, c, as_))(c, as_)
+    self.assertAllClose(ans, expected, check_dtypes=False)
+
+    as_ = np.ones((10, 5, 3))
+    c = np.ones(4)
+    ans = api.vmap(lambda as_:                scan(f, c, as_))(as_)
+    expected = api.vmap(lambda as_: scan_reference(f, c, as_))(as_)
+    self.assertAllClose(ans, expected, check_dtypes=False)
+
+    as_ = np.ones((5, 3))
+    c = np.ones((10, 4))
+    ans = api.vmap(lambda c:                scan(f, c, as_))(c)
+    expected = api.vmap(lambda c: scan_reference(f, c, as_))(c)
+    self.assertAllClose(ans, expected, check_dtypes=False)
 
 
 if __name__ == '__main__':
