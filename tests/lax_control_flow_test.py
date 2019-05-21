@@ -497,7 +497,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
       for jit_scan in [False, True]
       for jit_f in [False, True])
   def testScanImpl(self, jit_scan, jit_f):
-    d = np.zeros(2)
+    d = np.array([1., 2.])
     def f(c, a):
       assert a.shape == (3,)
       assert c.shape == (4,)
@@ -526,7 +526,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
       for jit_scan in [False, True]
       for jit_f in [False, True])
   def testScanJVP(self, jit_scan, jit_f):
-    d = np.zeros(2)
+    d = np.array([1., 2.])
     def f(c, a):
       assert a.shape == (3,)
       assert c.shape == (4,)
@@ -555,7 +555,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
       for jit_scan in [False, True]
       for jit_f in [False, True])
   def testScanLinearize(self, jit_scan, jit_f):
-    d = np.zeros(2)
+    d = np.array([1., 2.])
     def f(c, a):
       assert a.shape == (3,)
       assert c.shape == (4,)
@@ -584,7 +584,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
       for jit_scan in [False, True]
       for jit_f in [False, True])
   def testScanGrad(self, jit_scan, jit_f):
-    d = np.zeros(2)
+    d = np.ones(2)
     def f(c, a):
       assert a.shape == (3,)
       assert c.shape == (4,)
@@ -611,9 +611,9 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     r = npr.RandomState(0)
 
     n_in = 4
-    n_hid = 3
-    n_out = 2
-    length = 5
+    n_hid = 2
+    n_out = 1
+    length = 3
 
     W_trans = r.randn(n_hid, n_hid + n_in)
     W_out = r.randn(n_out, n_hid + n_in)
@@ -647,11 +647,18 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     # gradient evaluation doesn't crash
     api.grad(loss)(params, inputs, targets)
 
-    # gradient is zero in the right place
-    predictions = rnn(params, inputs)
-    ans = api.grad(loss)(params, inputs, predictions)
-    expected = (onp.zeros_like(W_trans), onp.zeros_like(W_out))
-    self.assertAllClose(ans, expected, check_dtypes=False)
+    # gradient check passes
+    jtu.check_grads(loss, (params, inputs, targets), order=1)
+
+    # we can vmap to batch things
+    batch_size = 7
+    batched_inputs = r.randn(batch_size, length, n_in)
+    batched_targets = r.randn(batch_size, length, n_out)
+    batched_loss = api.vmap(lambda x, y: loss(params, x, y))
+    losses = batched_loss(batched_inputs, batched_targets)
+    expected = onp.stack(list(map(lambda x, y: loss(params, x, y),
+                                  batched_inputs, batched_targets)))
+    self.assertAllClose(losses, expected, check_dtypes=False)
 
   def testIssue711(self):
     # Tests reverse-mode differentiation through a scan for which the scanned
@@ -702,7 +709,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
       for jit_scan in [False, True]
       for jit_f in [False, True])
   def testScanVmap(self, jit_scan, jit_f):
-    d = np.zeros(2)
+    d = np.array([1., 2.])
     def f(c, a):
       assert a.shape == (3,)
       assert c.shape == (4,)
